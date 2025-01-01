@@ -22,6 +22,15 @@ class GeoShape(metaclass=ABCMeta):
         self.y = y
 
         shapes.append(self)
+    
+    @abstractmethod
+    def __repr__(self) -> str:
+        """
+        Returns a string representation of the shape.
+
+        Returns:
+            str: A string representation of the shape.
+        """
         
     @abstractmethod
     def collides(self, x: float, y: float) -> bool:
@@ -54,6 +63,9 @@ class GeoCircle(GeoShape):
         super().__init__(x, y)
         self.radius = radius
     
+    def __repr__(self):
+        return f"[{shapes.index(self)}] GeoCircle(x={self.x}, y={self.y}, radius={self.radius})"
+    
     def collides(self, x, y):
         # Check if the distance between the point and the center of the circle is less than or equal to the radius
         return (x - self.x) ** 2 + (y - self.y) ** 2 <= self.radius**2
@@ -74,6 +86,9 @@ class GeoRectangle(GeoShape):
         self.width = width
         self.height = height
         self.angle = angle
+    
+    def __repr__(self):
+        return f"[{shapes.index(self)}] GeoRectangle(x={self.x}, y={self.y}, width={self.width}, height={self.height}, angle={self.angle})"
     
     @property
     def corners(self):
@@ -140,6 +155,9 @@ class GeoGroup(GeoShape):
         super().__init__(x, y)
         self.shapes = shapes
     
+    def __repr__(self):
+        return f"[{shapes.index(self)}] GeoGroup(x={self.x}, y={self.y}, shapes={self.shapes})"
+    
     def collides(self, x, y):
         for shape in self.shapes:
             if shape.collides(x, y):
@@ -148,11 +166,13 @@ class GeoGroup(GeoShape):
 
 if __name__ == "__main__":
     circle = GeoCircle(0, 0, 1)
+    print(circle)
     print(circle.collides(0, 0))
     print(circle.collides(1, 0))
     print(circle.collides(1.1, 0))
 
     rect = GeoRectangle(0, 0, 1, 1, 45)
+    print(rect)
     print(rect.corners)
     print(rect.collides(0, 0))
     print(rect.collides(0.5, 0))
@@ -160,6 +180,7 @@ if __name__ == "__main__":
     print(rect.collides(1, 0))
 
     group = GeoGroup(0, 0, circle, GeoRectangle(1, 0, 2, 2, 0))
+    print(group)
     print(group.collides(0, 0))
     print(group.collides(1, 0))
     print(group.collides(2, 0))
