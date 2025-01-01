@@ -88,46 +88,55 @@ class Camera:
 
         Args:
             step_size (float, optional): The step size for ray marching. Defaults to 1.
-            max_distance (float, optional): The maximum distance a beam can travel before stopping. Defaults to 100.
+            max_distance (float, optional): The distance a beam travels before stopping. Defaults to 100.
             geometry_groups (int, optional): Indices of geometry groups to check for collisions. If none are provided,
                                             all groups with assigned colors are considered.
 
         Notes:
             - The function clears and updates the camera's viewport by drawing lines representing beams emitted by the camera.
-            - Each beam checks for collisions with the specified geometry groups. If a collision is detected, the pixel is
-            colored based on the group's assigned color and the distance to the collision.
+            - Each beam checks for collisions with the specified geometry groups. Detected collisions are colored in reverse, 
+              so that transparency works
         """
-
         if len(geometry_groups) == 0:
             geometry_groups = group_colors.keys()
+        
         for beam_index, angle in enumerate(self.beam_angles):
             distance = 0
-            collision = False
+            collisions = []
+
             # Clear pixel
             pg.draw.line(self.viewport, (0, 0, 0, 255), (beam_index, 0), (beam_index, 0))
-            while not collision and distance < max_distance:
+
+            # Check collisions
+            while distance < max_distance:
                 for group_index in geometry_groups:
-                    if group_index in group_colors:
+                    if group_index in group_colors and all(group_index != g for g, d in collisions):
                         group = geometry.groups[group_index]
                         if group.collides(self.x + distance * np.cos(np.deg2rad(angle)), self.y + distance * np.sin(np.deg2rad(angle))):
-                            pg.draw.line(self.viewport, 
-                                         (group_colors[group_index][0] * (1 - distance / max_distance), 
-                                          group_colors[group_index][1] * (1 - distance / max_distance), 
-                                          group_colors[group_index][2] * (1 - distance / max_distance), 
-                                          group_colors[group_index][3]), 
-                                         (beam_index, 0), (beam_index + 1, 0))
-                            collision = True
-                            break
+                            collisions.append((group_index, distance))
                 distance += step_size
-                
+            
+            # Draw collisions
+            for collision, distance in collisions[::-1]:
+                # Temporary surface, required for color blending to work
+                temp_surf = pg.Surface(self.viewport.get_size(), pg.SRCALPHA)
+                pg.draw.line(temp_surf, 
+                                (group_colors[collision][0] * (1 - distance / max_distance), 
+                                 group_colors[collision][1] * (1 - distance / max_distance), 
+                                 group_colors[collision][2] * (1 - distance / max_distance), 
+                                 group_colors[collision][3]), 
+                                (beam_index, 0), (beam_index, 0))
+                self.viewport.blit(temp_surf, (0, 0))
 
 if __name__ == "__main__":
     geometry.GeoGroup(5, 0, geometry.GeoCircle(0, 0, 1))
-    color_group(0, (255, 0, 0, 255))
+    color_group(0, (255, 0, 0, 100))
     geometry.GeoGroup(5, 5, geometry.GeoCircle(0, 0, 1))
     color_group(1, (0, 0, 255, 255))
     geometry.GeoGroup(0, 5, geometry.GeoCircle(0, 0, 1))
     color_group(2, (0, 255, 0, 255))
+    geometry.GeoGroup(6, 0, geometry.GeoCircle(0, 0, 1))
+    color_group(3, (255, 255, 0, 255))
 
     cam = Camera(0, 0, 0, 100, 100)
     cam.render()
@@ -137,6 +146,7 @@ if __name__ == "__main__":
     screen = pg.display.set_mode((500, 50), pg.RESIZABLE)
     clock = pg.time.Clock()
     running = True
+
     while running:
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -158,6 +168,7 @@ if __name__ == "__main__":
                     cam.direction += 10
         
         cam.render(step_size=0.1, max_distance=10)
+        screen.fill((0, 0, 0))
         screen.blit(pg.transform.scale(cam.viewport, screen.get_size()), (0, 0))
         pg.display.flip()
 
