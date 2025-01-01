@@ -7,6 +7,8 @@ Deals with defining geometry and its functionality
 from abc import abstractmethod, ABCMeta
 import numpy as np
 
+shapes = []
+
 class GeoShape(metaclass=ABCMeta):
     """
     Basic geometry class, abstract class for concrete shapes.
@@ -18,6 +20,8 @@ class GeoShape(metaclass=ABCMeta):
     def __init__(self, x: float, y: float) -> None:
         self.x = x
         self.y = y
+
+        shapes.append(self)
         
     @abstractmethod
     def collides(self, x: float, y: float) -> bool:
@@ -123,6 +127,25 @@ class GeoRectangle(GeoShape):
         half_w, half_h = self.width / 2, self.height / 2
         return -half_w <= rotated_x <= half_w and -half_h <= rotated_y <= half_h
 
+class GeoGroup(GeoShape):
+    """
+    Geometry class for groups of shapes.
+
+    Attributes:
+        x (float): The x-coordinate of the group.
+        y (float): The y-coordinate of the group.
+        shapes (list[GeoShape]): A list of shapes that make up the group. Their positions are relative to the group's position.
+    """
+    def __init__(self, x: float, y: float, *shapes: GeoShape) -> None:
+        super().__init__(x, y)
+        self.shapes = shapes
+    
+    def collides(self, x, y):
+        for shape in self.shapes:
+            if shape.collides(x, y):
+                return True
+        return False
+
 if __name__ == "__main__":
     circle = GeoCircle(0, 0, 1)
     print(circle.collides(0, 0))
@@ -135,3 +158,14 @@ if __name__ == "__main__":
     print(rect.collides(0.5, 0))
     print(rect.collides(0.55, 0))
     print(rect.collides(1, 0))
+
+    group = GeoGroup(0, 0, circle, GeoRectangle(1, 0, 2, 2, 0))
+    print(group.collides(0, 0))
+    print(group.collides(1, 0))
+    print(group.collides(2, 0))
+    print(group.collides(2.1, 0))
+    print(group.collides(-1, 0))
+    print(group.collides(-1.1, 0))
+    print(group.collides(-1, 1))
+    print(group.collides(1, 1))
+    print(group.collides(2, 1))
