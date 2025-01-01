@@ -8,6 +8,7 @@ from abc import abstractmethod, ABCMeta
 import numpy as np
 
 shapes = []
+groups = []
 
 class GeoShape(metaclass=ABCMeta):
     """
@@ -154,9 +155,11 @@ class GeoGroup(GeoShape):
     def __init__(self, x: float, y: float, *shapes: GeoShape) -> None:
         super().__init__(x, y)
         self.shapes = shapes
+
+        groups.append(self)
     
     def __repr__(self):
-        return f"[{shapes.index(self)}] GeoGroup(x={self.x}, y={self.y}, shapes={self.shapes})"
+        return f"[{groups.index(self)}] GeoGroup(x={self.x}, y={self.y}, shapes={self.shapes})"
     
     def collides(self, x, y):
         for shape in self.shapes:
