@@ -51,4 +51,3 @@ def blit_aspect(target_surface: pg.Surface, source_surface: pg.Surface,
 
     # Blit the scaled surface onto the target surface
     target_surface.blit(scaled_surface, (x_pos, y_pos))
-
