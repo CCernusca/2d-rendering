@@ -92,7 +92,7 @@ class GeoRectangle(GeoShape):
         return f"[{shapes.index(self)}] GeoRectangle(x={self.x}, y={self.y}, width={self.width}, height={self.height}, angle={self.angle})"
     
     @property
-    def corners(self):
+    def corners(self) -> list[tuple[float, float]]:
         """
         Returns the coordinates of all corners of the rectangle in global space.
 
@@ -155,6 +155,11 @@ class GeoGroup(GeoShape):
     def __init__(self, x: float, y: float, *shapes: GeoShape) -> None:
         super().__init__(x, y)
         self.shapes = shapes
+
+        # Update shapes' positions to be relative to the group
+        for shape in shapes:
+            shape.x += x
+            shape.y += y
 
         groups.append(self)
     
