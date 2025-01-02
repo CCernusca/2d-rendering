@@ -50,6 +50,15 @@ class GeoShape(metaclass=ABCMeta):
             The implementation should take into account the specific geometry and
             properties of the shape.
         """
+    
+    @abstractmethod
+    def bounds(self) -> tuple[float, float, float, float]:
+        """
+        Returns the bounding box of the shape.
+
+        Returns:
+            tuple[float, float, float, float]: A tuple containing the outmost (x_min, y_min, x_max, y_max) coordinates of the bounding box.
+        """
 
 class GeoCircle(GeoShape):
     """
@@ -70,6 +79,10 @@ class GeoCircle(GeoShape):
     def collides(self, x, y):
         # Check if the distance between the point and the center of the circle is less than or equal to the radius
         return (x - self.x) ** 2 + (y - self.y) ** 2 <= self.radius**2
+
+    @property
+    def bounds(self):
+        return self.x - self.radius, self.y - self.radius, self.x + self.radius, self.y + self.radius
 
 class GeoRectangle(GeoShape):
     """
@@ -143,6 +156,10 @@ class GeoRectangle(GeoShape):
         half_w, half_h = self.width / 2, self.height / 2
         return -half_w <= rotated_x <= half_w and -half_h <= rotated_y <= half_h
 
+    @property
+    def bounds(self):
+        return min(c[0] for c in self.corners), min(c[1] for c in self.corners), max(c[0] for c in self.corners), max(c[1] for c in self.corners)
+
 class GeoGroup(GeoShape):
     """
     Geometry class for groups of shapes.
@@ -173,9 +190,17 @@ class GeoGroup(GeoShape):
                 return True
         return False
 
+    @property
+    def bounds(self):
+        x_min, y_min, x_max, y_max = 0, 0, 0, 0
+        for shape in self.shapes:
+            x_min, y_min, x_max, y_max = min(x_min, shape.bounds[0]), min(y_min, shape.bounds[1]), max(x_max, shape.bounds[2]), max(y_max, shape.bounds[3])
+        return x_min, y_min, x_max, y_max
+
 if __name__ == "__main__":
     circle = GeoCircle(0, 0, 1)
     print(circle)
+    print(circle.bounds)
     print(circle.collides(0, 0))
     print(circle.collides(1, 0))
     print(circle.collides(1.1, 0))
@@ -183,6 +208,7 @@ if __name__ == "__main__":
     rect = GeoRectangle(0, 0, 1, 1, 45)
     print(rect)
     print(rect.corners)
+    print(rect.bounds)
     print(rect.collides(0, 0))
     print(rect.collides(0.5, 0))
     print(rect.collides(0.55, 0))
@@ -190,6 +216,7 @@ if __name__ == "__main__":
 
     group = GeoGroup(0, 0, circle, GeoRectangle(1, 0, 2, 2, 0))
     print(group)
+    print(group.bounds)
     print(group.collides(0, 0))
     print(group.collides(1, 0))
     print(group.collides(2, 0))
