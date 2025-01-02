@@ -351,7 +351,7 @@ def start():
         control["quit"] = True
     pg.quit()
 
-def add_viewer(x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 1, collision_detailisation: int = 1) -> Viewer:
+def add_viewer(x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 10, collision_detailisation: int = 1) -> Viewer:
     """
     Adds a new viewer to the scene.
 
