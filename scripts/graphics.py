@@ -105,17 +105,20 @@ class Camera:
         for beam_index, angle in enumerate(self.beam_angles):
             distance = 0
             collisions = []
+            collected_alpha = 0
 
             # Clear pixel
             pg.draw.line(self.viewport, (0, 0, 0, 255), (beam_index, 0), (beam_index, 0))
 
             # Check collisions
-            while distance < max_distance:
+            while distance < max_distance and collected_alpha < 255:
                 for group_index in geometry_groups:
                     if group_index in group_colors and all(group_index != g for g, d in collisions):
                         group = geometry.groups[group_index]
                         if group.collides(self.x + distance * np.cos(np.deg2rad(angle)), self.y + distance * np.sin(np.deg2rad(angle))):
                             collisions.append((group_index, distance))
+                            collected_alpha += group_colors[group_index][3]
+                            
                 distance += step_size
             
             if collisions:
