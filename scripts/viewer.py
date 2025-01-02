@@ -144,32 +144,64 @@ def create_viewer_window(resolution: int, control_queue: multiprocessing.Queue, 
 
     display = pg.Surface((resolution, 1), pg.SRCALPHA)
 
+    movement = {
+        "move-forward": False,
+        "move-backward": False,
+        "move-left": False,
+        "move-right": False,
+        "turn-left": False,
+        "turn-right": False
+    }
+
     while running:
         if not control_queue.empty():
             try:
                 command = control_queue.get(timeout=0.1)
-                if command[0] == "quit":
+                if command == "quit":
                     running = False
                 else:
                     if command is not None:
                         control_queue.put(command)
             except queue.Empty:
                 pass
-
+        
         for event in pg.event.get():
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_w:
-                    control_queue.put(("move", (-MOVESPEED, 0)))
+                    # control_queue.put(("move", (-MOVESPEED, 0)))
+                    movement["move-forward"] = True
                 if event.key == pg.K_s:
-                    control_queue.put(("move", (MOVESPEED, 0)))
+                    # control_queue.put(("move", (MOVESPEED, 0)))
+                    movement["move-backward"] = True
                 if event.key == pg.K_a:
-                    control_queue.put(("move", (0, -MOVESPEED)))
+                    # control_queue.put(("move", (0, -MOVESPEED)))
+                    movement["move-left"] = True
                 if event.key == pg.K_d:
-                    control_queue.put(("move", (0, MOVESPEED)))
+                    # control_queue.put(("move", (0, MOVESPEED)))
+                    movement["move-right"] = True
                 if event.key == pg.K_q:
-                    control_queue.put(("turn", (-TURNSPEED)))
+                    # control_queue.put(("turn", (-TURNSPEED)))
+                    movement["turn-left"] = True
                 if event.key == pg.K_e:
-                    control_queue.put(("turn", (TURNSPEED)))
+                    # control_queue.put(("turn", (TURNSPEED)))
+                    movement["turn-right"] = True
+            if event.type == pg.KEYUP:
+                if event.key == pg.K_w:
+                    movement["move-forward"] = False
+                if event.key == pg.K_s:
+                    movement["move-backward"] = False
+                if event.key == pg.K_a:
+                    movement["move-left"] = False
+                if event.key == pg.K_d:
+                    movement["move-right"] = False
+                if event.key == pg.K_q:
+                    movement["turn-left"] = False
+                if event.key == pg.K_e:
+                    movement["turn-right"] = False
+        
+        for move, flag in movement.items():
+            if flag:
+                control_queue.put(move)
         
         if not display_queue.empty():
             pg.surfarray.blit_array(display, display_queue.get())
@@ -230,17 +262,25 @@ def start():
             if not control_queue.empty():
                 try:
                     command = control_queue.get(timeout=0.1)
-                    if command[0] == "move":
-                        viewer.move(*command[1])
-                        viewer.update()
-                    elif command[0] == "turn":
-                        viewer.turn(command[1])
-                        viewer.update()
+                    if command == "move-forward":
+                        viewer.move(-MOVESPEED, 0)
+                    elif command == "move-backward":
+                        viewer.move(MOVESPEED, 0)
+                    elif command == "move-left":
+                        viewer.move(0, -MOVESPEED)
+                    elif command == "move-right":
+                        viewer.move(0, MOVESPEED)
+                    elif command == "turn-left":
+                        viewer.turn(-TURNSPEED)
+                    elif command == "turn-right":
+                        viewer.turn(TURNSPEED)
                     else:
                         if command is not None:
                             control_queue.put(command)
                 except queue.Empty:
                     pass
+
+                viewer.update()
                 
                 # Only update displays when changes are made
                 
@@ -255,7 +295,7 @@ def start():
         clock.tick(60)
     
     for control_queue in control_queues:
-        control_queue.put(("quit", None))
+        control_queue.put("quit")
     pg.quit()
 
 def add_viewer(x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 1) -> Viewer:
