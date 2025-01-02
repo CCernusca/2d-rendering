@@ -12,9 +12,11 @@ import numpy as np
 try:
     import scripts.geometry as geometry
     import scripts.graphics as graphics
+    import scripts.utils as utils
 except ModuleNotFoundError:
     import geometry
     import graphics
+    import utils
 
 MOVESPEED = 10
 TURNSPEED = 10
@@ -240,14 +242,15 @@ def start():
                 except queue.Empty:
                     pass
                 
-                # Only update screens when changes are made
+                # Only update displays when changes are made
                 
                 display_queues[viewer_index].put(pg.surfarray.array3d(viewer.viewport))
 
-                screen.fill((0, 0, 0))
                 show_geometry(display)
-                screen.blit(pg.transform.scale(display, screen.get_size()), (0, 0))
-                pg.display.flip()
+            
+            screen.fill((50, 50, 50))
+            utils.blit_aspect(screen, display)
+            pg.display.flip()
 
         clock.tick(60)
     
