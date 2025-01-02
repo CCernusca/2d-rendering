@@ -81,7 +81,7 @@ class Camera:
         angle_per_pixel = self.field_of_view / self.resolution
         return [self.direction + angle for angle in np.arange(-self.field_of_view / 2, self.field_of_view / 2, angle_per_pixel)]
     
-    def render(self, step_size: float = 1, max_distance: float = 100, *geometry_groups: int):
+    def render(self, step_size: float = 1, max_distance: float = 100, *geometry_groups: int) -> list[tuple[float, float]]:
         """
         Renders the scene by simulating a 2D view from the camera's position, detecting collisions with geometry groups,
         and updating the viewport with color based on the distance to the nearest collision.
@@ -97,6 +97,8 @@ class Camera:
             - Each beam checks for collisions with the specified geometry groups. Detected collisions are colored in reverse, 
               so that transparency works
         """
+        beam_ends = []
+
         if len(geometry_groups) == 0:
             geometry_groups = group_colors.keys()
         
@@ -116,6 +118,11 @@ class Camera:
                             collisions.append((group_index, distance))
                 distance += step_size
             
+            if collisions:
+                beam_ends.append((self.x + collisions[-1][1] * np.cos(np.deg2rad(angle)), self.y + collisions[-1][1] * np.sin(np.deg2rad(angle))))
+            else:
+                beam_ends.append((self.x + distance * np.cos(np.deg2rad(angle)), self.y + distance * np.sin(np.deg2rad(angle))))
+            
             # Draw collisions
             for collision, distance in collisions[::-1]:
                 # Temporary surface, required for color blending to work
@@ -127,6 +134,8 @@ class Camera:
                                  group_colors[collision][3]), 
                                 (beam_index, 0), (beam_index, 0))
                 self.viewport.blit(temp_surf, (0, 0))
+            
+        return beam_ends
 
 if __name__ == "__main__":
     geometry.GeoGroup(5, 0, geometry.GeoCircle(0, 0, 1))
