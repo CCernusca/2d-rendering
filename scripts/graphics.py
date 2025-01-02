@@ -78,10 +78,10 @@ class Camera:
         Returns:
             list[float]: A list of angles in degrees, representing the global direction of each beam, evenly spaced across the camera's field of view.
         """
-        angle_per_pixel = self.field_of_view / self.resolution
-        return [self.direction + angle for angle in np.arange(-self.field_of_view / 2, self.field_of_view / 2, angle_per_pixel)]
+        angle_per_pixel = self.field_of_view / (self.resolution - 1)
+        return [*(self.direction + angle for angle in np.arange(-self.field_of_view / 2, self.field_of_view / 2, angle_per_pixel)), self.direction + self.field_of_view / 2]
     
-    def render(self, step_size: float = 1, max_distance: float = 100, *geometry_groups: int) -> list[tuple[float, float]]:
+    def render(self, step_size: float = 1, max_distance: float = 100, detailisation: float = 1, *geometry_groups: int) -> list[tuple[float, float]]:
         """
         Renders the scene by simulating a 2D view from the camera's position, detecting collisions with geometry groups,
         and updating the viewport with color based on the distance to the nearest collision.
@@ -89,6 +89,7 @@ class Camera:
         Args:
             step_size (float, optional): The step size for ray marching. Defaults to 1.
             max_distance (float, optional): The distance a beam travels before stopping. Defaults to 100.
+            detailisation (float, optional): To which length of detail the collisions are explored. Defaults to 1.
             geometry_groups (int, optional): Indices of geometry groups to check for collisions. If none are provided,
                                             all groups with assigned colors are considered.
 
@@ -99,29 +100,63 @@ class Camera:
         """
         beam_ends = []
 
+        def detailed_distance(group: geometry.GeoGroup, distance: float, angle: float, step_size: float, step_size_threshold: float = detailisation) -> float:
+            """
+            Calculates a more precise collision distance by recursively adjusting the step size.
+
+            This function checks for collisions at increasing levels of detail by recursively halving the step size. It returns the distance at which a collision occurs or when the step size is below a threshold.
+
+            Args:
+                group (geometry.GeoGroup): The geometry group to check for collisions.
+                distance (float): The current distance to check for collisions.
+                angle (float): The angle in degrees at which the beam is emitted.
+                step_size (float): The current step size for ray marching.
+                step_size_threshold (float, optional): The threshold below which the step size is considered sufficiently detailed. Defaults to the detailisation value.
+
+            Returns:
+                float: The distance at which a collision is detected or when the step size threshold is reached.
+            """
+            if step_size < step_size_threshold or distance - step_size / 2 < step_size_threshold:
+                return distance
+            detailed_x = self.x + (distance - step_size / 2) * np.cos(np.deg2rad(angle))
+            detailed_y = self.y + (distance - step_size / 2) * np.sin(np.deg2rad(angle))
+            if group.collides(detailed_x, detailed_y):
+                return detailed_distance(group, distance - step_size / 2, angle, step_size / 2)
+            else:
+                return detailed_distance(group, distance, angle, step_size / 2)
+
         if len(geometry_groups) == 0:
             geometry_groups = group_colors.keys()
         
         for beam_index, angle in enumerate(self.beam_angles):
             distance = 0
             collisions = []
+            collected_alpha = 0
 
             # Clear pixel
             pg.draw.line(self.viewport, (0, 0, 0, 255), (beam_index, 0), (beam_index, 0))
 
             # Check collisions
-            while distance < max_distance:
+            while distance <= max_distance and collected_alpha < 255:
+                x = self.x + distance * np.cos(np.deg2rad(angle))
+                y = self.y + distance * np.sin(np.deg2rad(angle))
                 for group_index in geometry_groups:
                     if group_index in group_colors and all(group_index != g for g, d in collisions):
                         group = geometry.groups[group_index]
-                        if group.collides(self.x + distance * np.cos(np.deg2rad(angle)), self.y + distance * np.sin(np.deg2rad(angle))):
-                            collisions.append((group_index, distance))
+                        if group.collides(x, y):
+                            collisions.append((group_index, detailed_distance(group, distance, angle, step_size)))
+                            # collisions.append((group_index, distance))
+
+                            collected_alpha += group_colors[group_index][3]
+                            
                 distance += step_size
             
             if collisions:
+                # detailed_dist = detailed_distance(geometry.groups[collisions[-1][0]], collisions[-1][1], angle, step_size)
+                # beam_ends.append((self.x + detailed_dist * np.cos(np.deg2rad(angle)), self.y + detailed_dist * np.sin(np.deg2rad(angle))))
                 beam_ends.append((self.x + collisions[-1][1] * np.cos(np.deg2rad(angle)), self.y + collisions[-1][1] * np.sin(np.deg2rad(angle))))
             else:
-                beam_ends.append((self.x + distance * np.cos(np.deg2rad(angle)), self.y + distance * np.sin(np.deg2rad(angle))))
+                beam_ends.append((x, y))
             
             # Draw collisions
             for collision, distance in collisions[::-1]:

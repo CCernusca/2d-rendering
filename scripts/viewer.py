@@ -36,8 +36,9 @@ class Viewer:
         resolution (int): The resolution/width of the viewer's viewport in pixels.
         max_distance (float): The maximum distance a beam travels before stopping.
         step_size (int): The step size for ray marching. Defaults to 1.
+        collision_detailisation (float): The detailisation of collisions. Defaults to 1.
     """
-    def __init__(self, x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 1) -> None:
+    def __init__(self, x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 1, collision_detailisation: float = 1) -> None:
         self.x = x
         self.y = y
         self.direction = direction
@@ -45,6 +46,7 @@ class Viewer:
         self.resolution = resolution
         self.max_distance = max_distance
         self.step_size = step_size
+        self.collision_detailisation = collision_detailisation
 
         self.camera = graphics.Camera(x, y, direction, field_of_view, resolution)
         # End points of the camera beams
@@ -58,7 +60,7 @@ class Viewer:
         """
         Updates the camera's properties and renders the scene.
 
-        Updates the camera's properties based on the viewer's properties, then renders the scene using the camera's properties and the max_distance and step_size of the viewer.
+        Updates the camera's properties based on the viewer's properties, then renders the scene using the camera's and viewer's properties.
         """
         self.camera.x = self.x
         self.camera.y = self.y
@@ -66,7 +68,7 @@ class Viewer:
         self.camera.field_of_view = self.field_of_view
         self.camera.resolution = self.resolution
 
-        self.lasers = self.camera.render(max_distance=self.max_distance, step_size=self.step_size)
+        self.lasers = self.camera.render(max_distance=self.max_distance, step_size=self.step_size, detailisation=self.collision_detailisation)
     
     def move(self, front_back: float, left_right: float) -> None:
         """
@@ -334,7 +336,7 @@ def start():
         control_queue.put(("quit", None))
     pg.quit()
 
-def add_viewer(x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 1) -> Viewer:
+def add_viewer(x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 1, collision_detailisation: int = 1) -> Viewer:
     """
     Adds a new viewer to the scene.
 
@@ -352,7 +354,7 @@ def add_viewer(x: float, y: float, direction: float, field_of_view: float, resol
     Returns:
         Viewer: The created viewer.
     """
-    return Viewer(x, y, direction, field_of_view, resolution, max_distance, step_size)
+    return Viewer(x, y, direction, field_of_view, resolution, max_distance, step_size, collision_detailisation)
 
 def add_geometry(x: float, y: float, color: tuple[int, int, int, int], *shapes: geometry.GeoShape) -> geometry.GeoGroup:
     """
@@ -374,8 +376,8 @@ def add_geometry(x: float, y: float, color: tuple[int, int, int, int], *shapes: 
     return geo
 
 if __name__ == "__main__":
-    add_viewer(150, 75, 0, 100, 100, 200)
-    add_viewer(450, 200, 180, 200, 100, 100)
+    add_viewer(150, 75, 0, 100, 100, 200, 10, 1)
+    add_viewer(450, 200, 180, 200, 100, 100, 10, 1)
 
     add_geometry(325, 75, (255, 0, 0, 150), geometry.GeoCircle(0, 0, 50))
     add_geometry(325, 325, (0, 0, 255, 255), geometry.GeoCircle(0, 0, 50), geometry.GeoRectangle(50, 0, 100, 100))
