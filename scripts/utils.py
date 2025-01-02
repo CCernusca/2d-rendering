@@ -140,7 +140,7 @@ def draw_circle(surface, corner1, corner2, color, width=0):
 	"""
 	Draws a circle on the given surface based on two opposite corners.
 
-	Parameters:
+	Args:
 		surface: The Pygame surface to draw on.
 		corner1: A tuple (x1, y1) representing one corner of the rectangle.
 		corner2: A tuple (x2, y2) representing the opposite corner of the rectangle.
@@ -158,3 +158,40 @@ def draw_circle(surface, corner1, corner2, color, width=0):
 
 	# Draw the circle on the surface
 	pygame.draw.circle(surface, color, (int(center_x), int(center_y)), diameter // 2, width)
+
+class SpatialGrid:
+    """
+    A spatial grid for grouping geometry groups based on their position.
+
+    Attributes:
+        cell_size: The size of each cell in the grid.
+    """
+    def __init__(self, cell_size: float):
+        self.cell_size = cell_size
+        self.grid = {}
+
+    def add_geometry(self, geometry_group, bounds):
+        """
+        Add a geometry group to the grid based on its bounding box.
+        Args:
+            geometry_group: The geometry group to add.
+            bounds: A tuple (x_min, y_min, x_max, y_max) defining the bounding box of the group.
+        """
+        x_min, y_min, x_max, y_max = bounds
+        for x in range(int(x_min // self.cell_size), int(x_max // self.cell_size) + 1):
+            for y in range(int(y_min // self.cell_size), int(y_max // self.cell_size) + 1):
+                if (x, y) not in self.grid:
+                    self.grid[(x, y)] = []
+                self.grid[(x, y)].append(geometry_group)
+
+    def query(self, x, y):
+        """
+        Get geometry groups in the cell containing point (x, y).
+        Args:
+            x: The x-coordinate of the query point.
+            y: The y-coordinate of the query point.
+        Returns:
+            List of geometry groups in the relevant cell.
+        """
+        cell = (int(x // self.cell_size), int(y // self.cell_size))
+        return self.grid.get(cell, [])

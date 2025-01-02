@@ -8,8 +8,10 @@ import pygame as pg
 import numpy as np
 try:
     import scripts.geometry as geometry
+    import scripts.utils as utils
 except ModuleNotFoundError:
     import geometry
+    import utils
 
 # Dictionary of colors for groups, indexed by group index
 group_colors = {}
@@ -80,54 +82,42 @@ class Camera:
         """
         angle_per_pixel = self.field_of_view / (self.resolution - 1)
         return [*(self.direction + angle for angle in np.arange(-self.field_of_view / 2, self.field_of_view / 2, angle_per_pixel)), self.direction + self.field_of_view / 2]
-    
-    def render(self, step_size: float = 1, max_distance: float = 100, detailisation: float = 1, *geometry_groups: int) -> list[tuple[float, float]]:
+
+    def detailed_distance(self, group: geometry.GeoGroup, distance: float, angle: float, step_size: float, step_size_threshold: float) -> float:
         """
-        Renders the scene by simulating a 2D view from the camera's position, detecting collisions with geometry groups,
-        and updating the viewport with color based on the distance to the nearest collision.
+        Calculates a more precise collision distance by recursively adjusting the step size.
+
+        This function checks for collisions at increasing levels of detail by recursively halving the step size. It returns the distance at which a collision occurs or when the step size is below a threshold.
 
         Args:
-            step_size (float, optional): The step size for ray marching. Defaults to 1.
-            max_distance (float, optional): The distance a beam travels before stopping. Defaults to 100.
-            detailisation (float, optional): To which length of detail the collisions are explored. Defaults to 1.
-            geometry_groups (int, optional): Indices of geometry groups to check for collisions. If none are provided,
-                                            all groups with assigned colors are considered.
+            group (geometry.GeoGroup): The geometry group to check for collisions.
+            distance (float): The current distance to check for collisions.
+            angle (float): The angle in degrees at which the beam is emitted.
+            step_size (float): The current step size for ray marching.
+            step_size_threshold (float, optional): The threshold below which the step size is considered sufficiently detailed. Defaults to the detailisation value.
 
-        Notes:
-            - The function clears and updates the camera's viewport by drawing lines representing beams emitted by the camera.
-            - Each beam checks for collisions with the specified geometry groups. Detected collisions are colored in reverse, 
-              so that transparency works
+        Returns:
+            float: The distance at which a collision is detected or when the step size threshold is reached.
         """
+        if step_size < step_size_threshold or distance - step_size / 2 < step_size_threshold:
+            return distance
+        detailed_x = self.x + (distance - step_size / 2) * np.cos(np.deg2rad(angle))
+        detailed_y = self.y + (distance - step_size / 2) * np.sin(np.deg2rad(angle))
+        if group.collides(detailed_x, detailed_y):
+            return self.detailed_distance(group, distance - step_size / 2, angle, step_size / 2, step_size_threshold)
+        else:
+            return self.detailed_distance(group, distance, angle, step_size / 2, step_size_threshold)
+
+    def render(self, step_size: float = 1, max_distance: float = 100, detailisation: float = 1, *geometry_groups: int) -> list[tuple[float, float]]:
         beam_ends = []
 
-        def detailed_distance(group: geometry.GeoGroup, distance: float, angle: float, step_size: float, step_size_threshold: float = detailisation) -> float:
-            """
-            Calculates a more precise collision distance by recursively adjusting the step size.
+        # Spatial grid for geometry groups
+        spatial_grid = utils.SpatialGrid(cell_size=100)  # Adjust cell size as needed
+        for group_index, group in enumerate(geometry.groups):
+            if group_index in group_colors:
+                bounds = group.bounds  # Assuming the geometry group has a bounding box property
+                spatial_grid.add_geometry(group, bounds)
 
-            This function checks for collisions at increasing levels of detail by recursively halving the step size. It returns the distance at which a collision occurs or when the step size is below a threshold.
-
-            Args:
-                group (geometry.GeoGroup): The geometry group to check for collisions.
-                distance (float): The current distance to check for collisions.
-                angle (float): The angle in degrees at which the beam is emitted.
-                step_size (float): The current step size for ray marching.
-                step_size_threshold (float, optional): The threshold below which the step size is considered sufficiently detailed. Defaults to the detailisation value.
-
-            Returns:
-                float: The distance at which a collision is detected or when the step size threshold is reached.
-            """
-            if step_size < step_size_threshold or distance - step_size / 2 < step_size_threshold:
-                return distance
-            detailed_x = self.x + (distance - step_size / 2) * np.cos(np.deg2rad(angle))
-            detailed_y = self.y + (distance - step_size / 2) * np.sin(np.deg2rad(angle))
-            if group.collides(detailed_x, detailed_y):
-                return detailed_distance(group, distance - step_size / 2, angle, step_size / 2)
-            else:
-                return detailed_distance(group, distance, angle, step_size / 2)
-
-        if len(geometry_groups) == 0:
-            geometry_groups = group_colors.keys()
-        
         for beam_index, angle in enumerate(self.beam_angles):
             distance = 0
             collisions = []
@@ -140,36 +130,39 @@ class Camera:
             while distance <= max_distance and collected_alpha < 255:
                 x = self.x + distance * np.cos(np.deg2rad(angle))
                 y = self.y + distance * np.sin(np.deg2rad(angle))
-                for group_index in geometry_groups:
-                    if group_index in group_colors and all(group_index != g for g, d in collisions):
-                        group = geometry.groups[group_index]
-                        if group.collides(x, y):
-                            collisions.append((group_index, detailed_distance(group, distance, angle, step_size)))
-                            # collisions.append((group_index, distance))
 
-                            collected_alpha += group_colors[group_index][3]
-                            
+                # Query the spatial grid for relevant geometry groups
+                nearby_groups = spatial_grid.query(x, y)
+
+                for group in nearby_groups:
+                    if geometry.groups.index(group) in group_colors and all(geometry.groups.index(group) != g for g, d in collisions):
+                        if group.collides(x, y):
+                            collisions.append((geometry.groups.index(group), self.detailed_distance(group, distance, angle, step_size, detailisation)))
+                            collected_alpha += group_colors[geometry.groups.index(group)][3]
+
                 distance += step_size
-            
+
             if collisions:
-                # detailed_dist = detailed_distance(geometry.groups[collisions[-1][0]], collisions[-1][1], angle, step_size)
-                # beam_ends.append((self.x + detailed_dist * np.cos(np.deg2rad(angle)), self.y + detailed_dist * np.sin(np.deg2rad(angle))))
                 beam_ends.append((self.x + collisions[-1][1] * np.cos(np.deg2rad(angle)), self.y + collisions[-1][1] * np.sin(np.deg2rad(angle))))
             else:
                 beam_ends.append((x, y))
-            
+
             # Draw collisions
             for collision, distance in collisions[::-1]:
-                # Temporary surface, required for color blending to work
                 temp_surf = pg.Surface(self.viewport.get_size(), pg.SRCALPHA)
-                pg.draw.line(temp_surf, 
-                                (group_colors[collision][0] * (1 - distance / max_distance), 
-                                 group_colors[collision][1] * (1 - distance / max_distance), 
-                                 group_colors[collision][2] * (1 - distance / max_distance), 
-                                 group_colors[collision][3]), 
-                                (beam_index, 0), (beam_index, 0))
+                pg.draw.line(
+                    temp_surf,
+                    (
+                        group_colors[collision][0] * (1 - distance / max_distance),
+                        group_colors[collision][1] * (1 - distance / max_distance),
+                        group_colors[collision][2] * (1 - distance / max_distance),
+                        group_colors[collision][3],
+                    ),
+                    (beam_index, 0),
+                    (beam_index, 0),
+                )
                 self.viewport.blit(temp_surf, (0, 0))
-            
+
         return beam_ends
 
 if __name__ == "__main__":
