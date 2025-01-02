@@ -153,7 +153,8 @@ class GeoGroup(GeoShape):
         shapes (list[GeoShape]): A list of shapes that make up the group. Their positions are relative to the group's position.
     """
     def __init__(self, x: float, y: float, *shapes: GeoShape) -> None:
-        super().__init__(x, y)
+        self.x = x
+        self.y = y
         self.shapes = shapes
 
         # Update shapes' positions to be relative to the group

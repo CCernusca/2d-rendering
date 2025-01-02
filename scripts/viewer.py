@@ -20,6 +20,7 @@ except ModuleNotFoundError:
 
 MOVESPEED = 10
 TURNSPEED = 10
+SELECTION_COLOR = (200, 200, 200, 255)
 
 viewers = []
 
@@ -182,6 +183,41 @@ def create_viewer_window(resolution: int, control_queue: multiprocessing.Queue, 
     
     pg.quit()
 
+def spawn_rectangle_from_selection(selection: list[tuple[int, int], tuple[int, int]], color: tuple[int, int, int, int] = SELECTION_COLOR) -> None:
+    """
+    Spawns a rectangle geometry based on the selection of two opposite corners.
+
+    Args:
+        selection (list[tuple[int, int], tuple[int, int]]): A list containing two tuples, each representing the (x, y) coordinates of a corner.
+        color (tuple[int, int, int, int], optional): The RGBA color of the rectangle. Defaults to SELECTION_COLOR.
+
+    Notes:
+        - The rectangle is defined by the two corners provided in the selection.
+        - The function calculates the width and height of the rectangle, and centers it around the midpoint of the selection.
+    """
+    width = abs(selection[1][0] - selection[0][0])
+    height = abs(selection[1][1] - selection[0][1])
+    x = max(selection[0][0], selection[1][0]) - width / 2
+    y = max(selection[0][1], selection[1][1]) - height / 2
+    add_geometry(x, y, color, geometry.GeoRectangle(0, 0, width, height))
+
+def spawn_circle_from_selection(selection: list[tuple[int, int], tuple[int, int]], color: tuple[int, int, int, int] = SELECTION_COLOR) -> None:
+    """
+    Spawns a circle geometry based on the selection of two opposite corners.
+
+    Args:
+        selection (list[tuple[int, int], tuple[int, int]]): A list containing two tuples, each representing the (x, y) coordinates of a corner.
+        color (tuple[int, int, int, int], optional): The RGBA color of the circle. Defaults to SELECTION_COLOR.
+
+    Notes:
+        - The circle is centered around the midpoint of the selection.
+        - The radius of the circle is the minimum of the absolute difference in x and y coordinates of the two corners.
+    """
+    radius = min(abs(selection[1][0] - selection[0][0]), abs(selection[1][1] - selection[0][1])) / 2
+    x = (selection[0][0] + selection[1][0]) / 2
+    y = (selection[0][1] + selection[1][1]) / 2
+    add_geometry(x, y, color, geometry.GeoCircle(0, 0, radius))
+
 def start():
     """
     Starts the geometry window, viewer windows, and event loop.
@@ -200,6 +236,7 @@ def start():
     running = True
 
     display = pg.Surface((500, 500), pg.SRCALPHA)
+    selection_layer = pg.Surface(display.get_size(), pg.SRCALPHA)
 
     control_queues = []
     display_queues = []
@@ -217,6 +254,12 @@ def start():
     screen.blit(pg.transform.scale(display, screen.get_size()), (0, 0))
     pg.display.flip()
 
+    left_mouse = False
+    right_mouse = False
+
+    left_selection = [(0, 0), (0, 0)]
+    right_selection = [(0, 0), (0, 0)]
+
     while running:
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -224,7 +267,36 @@ def start():
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_ESCAPE:
                     running = False
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if pg.mouse.get_pressed()[0]:
+                    left_mouse = True
+                if pg.mouse.get_pressed()[2]:
+                    right_mouse = True
+            if event.type == pg.MOUSEBUTTONUP:
+                if not pg.mouse.get_pressed()[0]:
+                    left_mouse = False
+                    spawn_rectangle_from_selection(left_selection)
+                    for viewer in viewers:
+                        viewer.update()
+                    show_geometry(display)
+                    for viewer in viewers:
+                        display_queues[viewers.index(viewer)].put(pg.surfarray.array3d(viewer.viewport))
+                if not pg.mouse.get_pressed()[2]:
+                    right_mouse = False
+                    spawn_circle_from_selection(right_selection)
+                    for viewer in viewers:
+                        viewer.update()
+                    show_geometry(display)
+                    for viewer in viewers:
+                        display_queues[viewers.index(viewer)].put(pg.surfarray.array3d(viewer.viewport))
         
+        if not left_mouse:
+            left_selection[0] = utils.screen_to_display_position(pg.mouse.get_pos(), display.get_size(), screen.get_size())
+        left_selection[1] = utils.screen_to_display_position(pg.mouse.get_pos(), display.get_size(), screen.get_size())
+        if not right_mouse:
+            right_selection[0] = utils.screen_to_display_position(pg.mouse.get_pos(), display.get_size(), screen.get_size())
+        right_selection[1] = utils.screen_to_display_position(pg.mouse.get_pos(), display.get_size(), screen.get_size())
+
         for viewer_index, control_queue in enumerate(control_queues):
             viewer = viewers[viewer_index]
             if not control_queue.empty():
@@ -248,9 +320,13 @@ def start():
 
                 show_geometry(display)
             
-            screen.fill((50, 50, 50))
-            utils.blit_aspect(screen, display)
-            pg.display.flip()
+        screen.fill((50, 50, 50))
+        utils.blit_aspect(screen, display)
+        selection_layer.fill((0, 0, 0, 0))
+        utils.draw_rectangle(selection_layer, *left_selection, SELECTION_COLOR, 2)
+        utils.draw_circle(selection_layer, *right_selection, SELECTION_COLOR, 2)
+        utils.blit_aspect(screen, selection_layer)
+        pg.display.flip()
 
         clock.tick(60)
     
