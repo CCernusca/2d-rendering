@@ -18,8 +18,8 @@ except ModuleNotFoundError:
     import graphics
     import utils
 
-MOVESPEED = 10
-TURNSPEED = 10
+MOVESPEED = 3
+TURNSPEED = 3
 SELECTION_COLOR = (200, 200, 200, 255)
 
 viewers = []
@@ -126,7 +126,7 @@ def show_geometry(surface: pg.Surface) -> None:
         for laser in viewer.lasers:
             pg.draw.line(surface, (255, 255, 255, 255), (viewer.x, viewer.y), laser, 1)
 
-def create_viewer_window(resolution: int, control_queue: multiprocessing.Queue, display_queue: multiprocessing.Queue) -> None:
+def create_viewer_window(resolution: int, control: dict, display_queue: multiprocessing.Queue) -> None:
     """
     Creates a separate window for displaying the view of a single viewer.
 
@@ -148,31 +148,36 @@ def create_viewer_window(resolution: int, control_queue: multiprocessing.Queue, 
     display = pg.Surface((resolution, 1), pg.SRCALPHA)
 
     while running:
-        if not control_queue.empty():
-            try:
-                command = control_queue.get(timeout=0.1)
-                if command[0] == "quit":
-                    running = False
-                else:
-                    if command is not None:
-                        control_queue.put(command)
-            except queue.Empty:
-                pass
-
+        if control["quit"]:
+            running = False
+        
         for event in pg.event.get():
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_w:
-                    control_queue.put(("move", (-MOVESPEED, 0)))
+                    control["move-forward"] = True
                 if event.key == pg.K_s:
-                    control_queue.put(("move", (MOVESPEED, 0)))
+                    control["move-backward"] = True
                 if event.key == pg.K_a:
-                    control_queue.put(("move", (0, -MOVESPEED)))
+                    control["move-left"] = True
                 if event.key == pg.K_d:
-                    control_queue.put(("move", (0, MOVESPEED)))
+                    control["move-right"] = True
                 if event.key == pg.K_q:
-                    control_queue.put(("turn", (-TURNSPEED)))
+                    control["turn-left"] = True
                 if event.key == pg.K_e:
-                    control_queue.put(("turn", (TURNSPEED)))
+                    control["turn-right"] = True
+            if event.type == pg.KEYUP:
+                if event.key == pg.K_w:
+                    control["move-forward"] = False
+                if event.key == pg.K_s:
+                    control["move-backward"] = False
+                if event.key == pg.K_a:
+                    control["move-left"] = False
+                if event.key == pg.K_d:
+                    control["move-right"] = False
+                if event.key == pg.K_q:
+                    control["turn-left"] = False
+                if event.key == pg.K_e:
+                    control["turn-right"] = False
         
         if not display_queue.empty():
             pg.surfarray.blit_array(display, display_queue.get())
@@ -240,12 +245,22 @@ def start():
     display = pg.Surface((500, 500), pg.SRCALPHA)
     selection_layer = pg.Surface(display.get_size(), pg.SRCALPHA)
 
-    control_queues = []
+    manager = multiprocessing.Manager()
+    controls = []
     display_queues = []
     for viewer in viewers:
-        control_queues.append(multiprocessing.Queue())
+        control = manager.dict({
+            "move-forward": False,
+            "move-backward": False,
+            "move-left": False,
+            "move-right": False,
+            "turn-left": False,
+            "turn-right": False,
+            "quit": False
+        })
+        controls.append(control)
         display_queues.append(multiprocessing.Queue())
-        multiprocessing.Process(target=create_viewer_window, args=(viewer.resolution, control_queues[-1], display_queues[-1])).start()
+        multiprocessing.Process(target=create_viewer_window, args=(viewer.resolution, controls[-1], display_queues[-1])).start()
 
     for viewer in viewers:
         viewer.update()
@@ -299,25 +314,25 @@ def start():
             right_selection[0] = utils.screen_to_display_position(pg.mouse.get_pos(), display.get_size(), screen.get_size())
         right_selection[1] = utils.screen_to_display_position(pg.mouse.get_pos(), display.get_size(), screen.get_size())
 
-        for viewer_index, control_queue in enumerate(control_queues):
+        for viewer_index, control in enumerate(controls):
             viewer = viewers[viewer_index]
-            if not control_queue.empty():
-                try:
-                    command = control_queue.get(timeout=0.1)
-                    if command[0] == "move":
-                        viewer.move(*command[1])
-                        viewer.update()
-                    elif command[0] == "turn":
-                        viewer.turn(command[1])
-                        viewer.update()
-                    else:
-                        if command is not None:
-                            control_queue.put(command)
-                except queue.Empty:
-                    pass
-                
-                # Only update displays when changes are made
-                
+            if control["move-forward"]:
+                viewer.move(-MOVESPEED, 0)
+            if control["move-backward"]:
+                viewer.move(MOVESPEED, 0)
+            if control["move-left"]:
+                viewer.move(0, -MOVESPEED)
+            if control["move-right"]:
+                viewer.move(0, MOVESPEED)
+            if control["turn-left"]:
+                viewer.turn(-TURNSPEED)
+            if control["turn-right"]:
+                viewer.turn(TURNSPEED)
+
+            # Only update displays when changes are made
+            if any(control.values()):
+                viewer.update()
+
                 display_queues[viewer_index].put(pg.surfarray.array3d(viewer.viewport))
 
                 show_geometry(display)
@@ -332,11 +347,11 @@ def start():
 
         clock.tick(60)
     
-    for control_queue in control_queues:
-        control_queue.put(("quit", None))
+    for control in controls:
+        control["quit"] = True
     pg.quit()
 
-def add_viewer(x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 1, collision_detailisation: int = 1) -> Viewer:
+def add_viewer(x: float, y: float, direction: float, field_of_view: float, resolution: int, max_distance: float, step_size: int = 10, collision_detailisation: int = 1) -> Viewer:
     """
     Adds a new viewer to the scene.
 
